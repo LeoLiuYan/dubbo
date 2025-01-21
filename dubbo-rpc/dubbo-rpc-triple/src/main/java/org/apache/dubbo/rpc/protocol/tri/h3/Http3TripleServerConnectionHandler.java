@@ -21,8 +21,11 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.incubator.codec.http3.Http3GoAwayFrame;
 import io.netty.util.ReferenceCountUtil;
+import org.apache.dubbo.config.context.ConfigManager;
+import org.apache.dubbo.config.nested.Http3Config;
 
 public class Http3TripleServerConnectionHandler extends ChannelDuplexHandler {
+    private Http3GracefulShutdown gracefulShutdown;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -35,16 +38,32 @@ public class Http3TripleServerConnectionHandler extends ChannelDuplexHandler {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        if (gracefulShutdown != null) {
+            // Ensure clean shutdown if not already done
+            gracefulShutdown.secondGoAwayAndClose(ctx);
+        }
         super.channelInactive(ctx);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        if (gracefulShutdown != null) {
+            // Ensure clean shutdown on exceptions
+            gracefulShutdown.secondGoAwayAndClose(ctx);
+        }
         super.exceptionCaught(ctx, cause);
     }
 
     @Override
     public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
-        super.close(ctx, promise);
+        if (gracefulShutdown == null) {
+            // Initialize graceful shutdown with default message
+            Http3Config config = ConfigManager.getProtocolOrDefault(null).getTripleOrDefault().getHttp3OrDefault();
+            gracefulShutdown = new Http3GracefulShutdown(ctx, "Server shutting down", promise, config);
+            gracefulShutdown.gracefulShutdown();
+        } else {
+            // If already shutting down, just pass through
+            super.close(ctx, promise);
+        }
     }
 }

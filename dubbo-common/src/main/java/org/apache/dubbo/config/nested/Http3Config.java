@@ -131,6 +131,12 @@ public class Http3Config implements Serializable {
      */
     private String ccAlgorithm;
 
+    /**
+     * Configures the timeout for graceful shutdown ping acknowledgment in seconds.
+     * <p>The default value is 10 seconds, matching the HTTP/2 implementation.
+     */
+    private Integer gracefulShutdownPingTimeout;
+
     public Boolean getEnabled() {
         return enabled;
     }
@@ -283,5 +289,18 @@ public class Http3Config implements Serializable {
 
     public void setCcAlgorithm(String ccAlgorithm) {
         this.ccAlgorithm = ccAlgorithm;
+    }
+
+    public Integer getGracefulShutdownPingTimeout() {
+        return gracefulShutdownPingTimeout;
+    }
+
+    @Parameter(excluded = true)
+    public int getGracefulShutdownPingTimeoutOrDefault() {
+        return gracefulShutdownPingTimeout == null ? 10 : gracefulShutdownPingTimeout;
+    }
+
+    public void setGracefulShutdownPingTimeout(Integer gracefulShutdownPingTimeout) {
+        this.gracefulShutdownPingTimeout = gracefulShutdownPingTimeout;
     }
 }
