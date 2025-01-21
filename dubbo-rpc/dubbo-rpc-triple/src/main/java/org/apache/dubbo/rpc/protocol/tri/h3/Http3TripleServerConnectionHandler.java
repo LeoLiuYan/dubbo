@@ -19,7 +19,11 @@ package org.apache.dubbo.rpc.protocol.tri.h3;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.incubator.codec.http3.DefaultHttp3Headers;
+import io.netty.incubator.codec.http3.DefaultHttp3HeadersFrame;
 import io.netty.incubator.codec.http3.Http3GoAwayFrame;
+import io.netty.incubator.codec.http3.Http3Headers;
+import io.netty.incubator.codec.http3.Http3HeadersFrame;
 import io.netty.util.ReferenceCountUtil;
 
 public class Http3TripleServerConnectionHandler extends ChannelDuplexHandler {
@@ -29,6 +33,22 @@ public class Http3TripleServerConnectionHandler extends ChannelDuplexHandler {
         if (msg instanceof Http3GoAwayFrame) {
             ReferenceCountUtil.release(msg);
             return;
+        }
+        if (msg instanceof Http3HeadersFrame) {
+            Http3Headers headers = ((Http3HeadersFrame) msg).headers();
+            if (headers.contains("tri-ping")) {
+                String pingValue = headers.get("tri-ping").toString();
+                if (pingValue.equals(String.valueOf(0x97ACEF001L))) {
+                    // Send ping ACK response
+                    Http3Headers responseHeaders = new DefaultHttp3Headers();
+                    responseHeaders.path("*");
+                    responseHeaders.method("OPTIONS");
+                    responseHeaders.scheme("https");
+                    responseHeaders.set("tri-ping-ack", pingValue);
+                    ctx.writeAndFlush(new DefaultHttp3HeadersFrame(responseHeaders));
+                    return;
+                }
+            }
         }
         super.channelRead(ctx, msg);
     }
@@ -45,6 +65,7 @@ public class Http3TripleServerConnectionHandler extends ChannelDuplexHandler {
 
     @Override
     public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
-        super.close(ctx, promise);
+        Http3GracefulShutdown gracefulShutdown = new Http3GracefulShutdown(ctx, "Server shutdown", promise);
+        gracefulShutdown.gracefulShutdown();
     }
 }
